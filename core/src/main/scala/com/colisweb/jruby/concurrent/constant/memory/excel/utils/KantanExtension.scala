@@ -6,7 +6,7 @@ import scala.collection.immutable.ArraySeq
 
 private[excel] object KantanExtension {
 
-  implicit final def arrayEncoder[A](implicit CellEncoder: CellEncoder[A]): RowEncoder[Array[A]] =
-    (array: Array[A]) => ArraySeq.unsafeWrapArray(array).map(CellEncoder.encode)
+  given arrayEncoder[A](using cellEncoder: CellEncoder[A]): RowEncoder[Array[A]] =
+    (array: Array[A]) => ArraySeq.unsafeWrapArray(array).map(cellEncoder.encode)
 
 }

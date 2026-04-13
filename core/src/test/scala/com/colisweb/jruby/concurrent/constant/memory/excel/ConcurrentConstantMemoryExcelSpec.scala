@@ -8,6 +8,7 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Date
 import scala.annotation.nowarn
+import scala.language.implicitConversions
 
 @nowarn("msg=unused value")
 class ConcurrentConstantMemoryExcelSpec extends AnyFlatSpec with Matchers {
@@ -16,14 +17,15 @@ class ConcurrentConstantMemoryExcelSpec extends AnyFlatSpec with Matchers {
     true shouldBe true
   }
 
-  import ConcurrentConstantMemoryExcel._
+  import ConcurrentConstantMemoryExcel.*
 
   val sheet_name = "SHEET_NAME"
   val headers    = Array("A", "B", "C")
 
   // Ugly but handy. Don't abuse of that !
-  implicit final def toCell(value: String): Cell = if (value.isEmpty) blankCell else stringCell(value)
-  implicit final def toCell(value: Double): Cell = numericCell(value)
+  given Conversion[String, Cell] = value => if (value.isEmpty) blankCell else stringCell(value)
+  given Conversion[Double, Cell] = value => numericCell(value)
+  given Conversion[Int, Cell]    = value => numericCell(value.toDouble)
 
   def newCMSPlz: Atomic[ConcurrentConstantMemoryState] = newWorkbookState(sheet_name, headers)
   def row(cells: Cell*): Array[Cell]                   = cells.toArray
