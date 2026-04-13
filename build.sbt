@@ -10,6 +10,14 @@ ThisBuild / semanticdbEnabled := true
 
 ThisBuild / licenses := Seq("MIT" -> url("https://opensource.org/licenses/MIT"))
 ThisBuild / homepage := Some(url("https://github.com/guizmaii-opensource/JRubyConcurrentConstantMemoryExcel"))
+ThisBuild / developers   := List(
+  Developer(
+    "guizmaii",
+    "Jules Ivanic",
+    "jules.ivanic@gmail.com",
+    url("https://https://ivanic.hashnode.dev/")
+  )
+)
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
