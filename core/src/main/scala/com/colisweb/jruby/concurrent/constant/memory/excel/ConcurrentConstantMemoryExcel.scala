@@ -1,18 +1,16 @@
 package com.colisweb.jruby.concurrent.constant.memory.excel
 
-import cats.effect.Resource
 import com.colisweb.jruby.concurrent.constant.memory.excel.utils.KantanExtension
 import kantan.csv.{CellDecoder, CellEncoder}
-import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.atomic.Atomic
 import org.apache.poi.ss.usermodel.*
 import org.apache.poi.ss.util.WorkbookUtil
 import org.apache.poi.xssf.streaming.SXSSFWorkbook
+import zio.*
 
 import java.io.{File, FileOutputStream}
 import java.nio.file.{Files, Path}
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.switch
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable.ListBuffer
@@ -68,8 +66,7 @@ object ConcurrentConstantMemoryExcel {
 
   private[excel] type Row = Array[Cell]
 
-  private given Codec     = Codec.UTF8
-  private given Scheduler = Scheduler.computation(name = "ConcurrentConstantMemoryExcel-computation")
+  private given Codec = Codec.UTF8
 
   final val blankCell: Cell = Cell.BlankCell
 
@@ -77,37 +74,39 @@ object ConcurrentConstantMemoryExcel {
 
   final def numericCell(value: Double): Cell = Cell.NumericCell(value)
 
-  final def newWorkbookState(sheetName: String, headerValues: Array[String]): Atomic[ConcurrentConstantMemoryState] =
-    Atomic(
+  final def newWorkbookState(
+    sheetName: String,
+    headerValues: Array[String],
+  ): AtomicReference[ConcurrentConstantMemoryState] =
+    AtomicReference(
       ConcurrentConstantMemoryState(
         sheetName = WorkbookUtil.createSafeSheetName(sheetName),
         headerData = headerValues,
         tmpDirectory = Files.createTempDirectory(UUID.randomUUID().toString).toFile,
         tasks = List.empty,
-        pages = SortedSet.empty
+        pages = SortedSet.empty,
       )
     )
 
   final def addRows(
-    atomicCms: Atomic[ConcurrentConstantMemoryState],
+    atomicCms: AtomicReference[ConcurrentConstantMemoryState],
     computeRows: => Array[Row],
-    pageIndex: Int
+    pageIndex: Int,
   ): Unit = {
     import KantanExtension.arrayEncoder
 
     val tmpCsvFile = java.io.File.createTempFile(UUID.randomUUID().toString, ".csv", atomicCms.get().tmpDirectory)
     val newPage    = Page(pageIndex, tmpCsvFile.toPath)
-    val task       = Task(tmpCsvFile.writeCsv[Row](computeRows, rfc))
+    val task       = ZIO.attempt(tmpCsvFile.writeCsv[Row](computeRows, rfc))
 
-    atomicCms.transform { cms =>
-      cms.copy(pages = cms.pages + newPage, tasks = cms.tasks :+ task)
-    }
+    atomicCms.updateAndGet(cms => cms.copy(pages = cms.pages + newPage, tasks = cms.tasks :+ task))
+    ()
   }
 
-  final def writeFile(atomicCms: Atomic[ConcurrentConstantMemoryState], fileName: String): Unit = {
+  final def writeFile(atomicCms: AtomicReference[ConcurrentConstantMemoryState], fileName: String): Unit = {
     val cms = atomicCms.get()
 
-    def computeWorkbookData(wb: SXSSFWorkbook): Task[Unit] = Task {
+    def computeWorkbookData(wb: SXSSFWorkbook): Task[Unit] = ZIO.attempt {
       val sheet = wb.createSheet(cms.sheetName)
       sheet.setDefaultColumnWidth(24)
 
@@ -147,37 +146,29 @@ object ConcurrentConstantMemoryExcel {
     }
 
     // TODO: Expose the `swallowIOExceptions` parameter in the `writeFile` function ?
-    def clean(swallowIOExceptions: Boolean = false): Task[Unit] = Task {
+    def clean(swallowIOExceptions: Boolean = false): Task[Unit] = ZIO.attempt {
       import better.files.* // better-files `delete()` method also works on directories, unlike the Java one.
       cms.tmpDirectory.toScala.delete(swallowIOExceptions)
       ()
     }
 
-    // Used as a Resource to ease the clean of the temporary CSVs created during the tasks calcultation.
-    val computeIntermediateTmpCsvFiles: Resource[Task, Unit] =
-      Resource.make(Task.parSequenceUnordered(cms.tasks).flatMap(_ => Task.unit))(_ => clean())
+    val program: ZIO[Scope, Throwable, Unit] =
+      for {
+        _   <- ZIO.acquireRelease(ZIO.collectAllParDiscard(cms.tasks))(_ => clean().orDie)
+        wb  <- ZIO.acquireRelease(ZIO.attempt(new SXSSFWorkbook(-1)))(wb =>
+                 ZIO.succeed {
+                   wb.dispose() // dispose of temporary files backing this workbook on disk. Necessary because not done in the `close()`. See: https://stackoverflow.com/a/50363245
+                   wb.close()
+                 }
+               )
+        _   <- computeWorkbookData(wb)
+        out <- ZIO.acquireRelease(ZIO.attempt(new FileOutputStream(fileName)))(out => ZIO.succeed(out.close()))
+        _   <- ZIO.attempt(wb.write(out))
+      } yield ()
 
-    val workbookResource: Resource[Task, SXSSFWorkbook] =
-      Resource.make {
-        // We'll manually manage the `flush` to the hard drive.
-        Task(new SXSSFWorkbook(-1))
-      }((wb: SXSSFWorkbook) =>
-        Task {
-          wb.dispose() // dispose of temporary files backing this workbook on disk. Necessary because not done in the `close()`. See: https://stackoverflow.com/a/50363245
-          wb.close()
-        }
-      )
-
-    val fileOutputStreamResource: Resource[Task, FileOutputStream] =
-      Resource.make(Task(new FileOutputStream(fileName)))(out => Task(out.close()))
-
-    computeIntermediateTmpCsvFiles
-      .use { _ =>
-        workbookResource.use { wb =>
-          computeWorkbookData(wb).flatMap(_ => fileOutputStreamResource.use(out => Task(wb.write(out))))
-        }
-      }
-      .runSyncUnsafe()
+    Unsafe.unsafe { implicit unsafe =>
+      Runtime.default.unsafe.run(ZIO.scoped(program)).getOrThrowFiberFailure()
+    }
   }
 
 }

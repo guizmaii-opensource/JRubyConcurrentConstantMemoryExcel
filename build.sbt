@@ -30,10 +30,11 @@ addCommandAlias("rctc", "reload; ctc")
 
 // ### Dependencies ###
 
+val zioVersion = "2.1.25"
+
 lazy val testKitLibs = Seq(
-  "org.scalacheck" %% "scalacheck" % "1.19.0",
-  "org.scalactic"  %% "scalactic"  % "3.2.20",
-  "org.scalatest"  %% "scalatest"  % "3.2.20",
+  "dev.zio" %% "zio-test"     % zioVersion,
+  "dev.zio" %% "zio-test-sbt" % zioVersion,
 ).map(_ % Test)
 
 lazy val poi =
@@ -44,15 +45,6 @@ lazy val poi =
         "org.apache.poi" % "poi-ooxml" % version
       )
   )("4.1.0")
-
-lazy val monix =
-  (
-    (version: String) =>
-      Seq(
-        "io.monix" %% "monix-execution" % version,
-        "io.monix" %% "monix-eval"      % version,
-      )
-  )("3.4.1")
 
 // ### Modules ###
 
@@ -69,7 +61,9 @@ lazy val core =
     .settings(stdSettings *)
     .settings(
       libraryDependencies ++= Seq(
+        "dev.zio"                %% "zio"          % zioVersion,
         "io.github.kantan-scala" %% "kantan.csv"   % "0.11.0",
         "com.github.pathikrit"   %% "better-files" % "3.9.2",
-      ) ++ monix ++ poi ++ testKitLibs
+      ) ++ poi ++ testKitLibs,
+      testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
     )
