@@ -13,14 +13,14 @@ import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import java.io.{File, FileOutputStream}
 import java.nio.file.{Files, Path}
 import java.util.UUID
-import scala.annotation.switch
+import scala.annotation.{nowarn, switch}
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable.ListBuffer
 import scala.io.Codec
 
 sealed abstract class Cell extends Product with Serializable
 object Cell {
-  private[excel] case object BlankCell                 extends Cell
+  private[excel] case object BlankCell                       extends Cell
   private[excel] final case class StringCell(value: String)  extends Cell
   private[excel] final case class NumericCell(value: Double) extends Cell
 
@@ -45,11 +45,13 @@ object Cell {
     }
 }
 
+@nowarn // TODO: Remove this nowarm when upgrading to Scala3
 final case class Page private[excel] (index: Int, path: Path)
 private[excel] object Page {
   implicit final val ordering: Ordering[Page] = Ordering.by(_.index)
 }
 
+@nowarn // TODO: Remove this nowarm when upgrading to Scala3
 final case class ConcurrentConstantMemoryState private[excel] (
   sheetName: String,
   headerData: Array[String],
@@ -161,13 +163,12 @@ object ConcurrentConstantMemoryExcel {
       Resource.make {
         // We'll manually manage the `flush` to the hard drive.
         Task(new SXSSFWorkbook(-1))
-      } {
-        wb: SXSSFWorkbook =>
-          Task {
-            wb.dispose() // dispose of temporary files backing this workbook on disk. Necessary because not done in the `close()`. See: https://stackoverflow.com/a/50363245
-            wb.close()
-          }
-      }
+      }((wb: SXSSFWorkbook) =>
+        Task {
+          wb.dispose() // dispose of temporary files backing this workbook on disk. Necessary because not done in the `close()`. See: https://stackoverflow.com/a/50363245
+          wb.close()
+        }
+      )
 
     val fileOutputStreamResource: Resource[Task, FileOutputStream] =
       Resource.make(Task(new FileOutputStream(fileName)))(out => Task(out.close()))
