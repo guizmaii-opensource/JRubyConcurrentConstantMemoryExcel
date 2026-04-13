@@ -8,9 +8,9 @@ ThisBuild / scalafmtSbtCheck  := true
 ThisBuild / scalafmtOnCompile := !insideCI.value
 ThisBuild / semanticdbEnabled := true
 
-ThisBuild / licenses := Seq("MIT" -> url("https://opensource.org/licenses/MIT"))
-ThisBuild / homepage := Some(url("https://github.com/guizmaii-opensource/JRubyConcurrentConstantMemoryExcel"))
-ThisBuild / developers   := List(
+ThisBuild / licenses   := Seq("MIT" -> url("https://opensource.org/licenses/MIT"))
+ThisBuild / homepage   := Some(url("https://github.com/guizmaii-opensource/JRubyConcurrentConstantMemoryExcel"))
+ThisBuild / developers := List(
   Developer(
     "guizmaii",
     "Jules Ivanic",
