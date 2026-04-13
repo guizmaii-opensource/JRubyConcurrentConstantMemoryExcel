@@ -13,30 +13,31 @@ import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import java.io.{File, FileOutputStream}
 import java.nio.file.{Files, Path}
 import java.util.UUID
-import scala.annotation.{nowarn, switch}
+import scala.annotation.switch
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable.ListBuffer
 import scala.io.Codec
 
-sealed abstract class Cell extends Product with Serializable
-object Cell {
-  private[excel] case object BlankCell                       extends Cell
-  private[excel] final case class StringCell(value: String)  extends Cell
-  private[excel] final case class NumericCell(value: Double) extends Cell
+enum Cell {
+  case BlankCell
+  case StringCell(value: String)
+  case NumericCell(value: Double)
+}
 
+object Cell {
   private[excel] final val BLANK_CELL   = 'b'
   private[excel] final val STRING_CELL  = 's'
   private[excel] final val NUMERIC_CELL = 'n'
 
-  implicit private[excel] final val encoder: CellEncoder[Cell] = {
+  private[excel] given CellEncoder[Cell] = {
     case BlankCell          => s"$BLANK_CELL:"
     case StringCell(value)  => s"$STRING_CELL:$value"
     case NumericCell(value) => s"$NUMERIC_CELL:$value"
   }
 
-  implicit private[excel] final val decoder: CellDecoder[Cell] =
+  private[excel] given CellDecoder[Cell] =
     CellDecoder.fromUnsafe { s =>
-      val Array(cellType, data) = s.split(":", 2)
+      val Array(cellType, data) = s.split(":", 2): @unchecked
       (cellType(0): @switch) match {
         case BLANK_CELL   => Cell.BlankCell
         case STRING_CELL  => Cell.StringCell(data)
@@ -45,13 +46,11 @@ object Cell {
     }
 }
 
-@nowarn // TODO: Remove this nowarm when upgrading to Scala3
 final case class Page private[excel] (index: Int, path: Path)
 private[excel] object Page {
-  implicit final val ordering: Ordering[Page] = Ordering.by(_.index)
+  given Ordering[Page] = Ordering.by(_.index)
 }
 
-@nowarn // TODO: Remove this nowarm when upgrading to Scala3
 final case class ConcurrentConstantMemoryState private[excel] (
   sheetName: String,
   headerData: Array[String],
@@ -62,16 +61,15 @@ final case class ConcurrentConstantMemoryState private[excel] (
 
 object ConcurrentConstantMemoryExcel {
 
-  import kantan.csv._
-  import kantan.csv.ops._
+  import kantan.csv.*
+  import kantan.csv.ops.*
   // https://nrinaudo.github.io/kantan.csv/bom.html
-  import kantan.codecs.resource.bom._
+  import kantan.codecs.resource.bom.*
 
   private[excel] type Row = Array[Cell]
 
-  implicit private[this] final val codec: Codec         = Codec.UTF8
-  implicit private[this] final val scheduler: Scheduler =
-    Scheduler.computation(name = "ConcurrentConstantMemoryExcel-computation")
+  private given Codec     = Codec.UTF8
+  private given Scheduler = Scheduler.computation(name = "ConcurrentConstantMemoryExcel-computation")
 
   final val blankCell: Cell = Cell.BlankCell
 
@@ -150,7 +148,7 @@ object ConcurrentConstantMemoryExcel {
 
     // TODO: Expose the `swallowIOExceptions` parameter in the `writeFile` function ?
     def clean(swallowIOExceptions: Boolean = false): Task[Unit] = Task {
-      import better.files._ // better-files `delete()` method also works on directories, unlike the Java one.
+      import better.files.* // better-files `delete()` method also works on directories, unlike the Java one.
       cms.tmpDirectory.toScala.delete(swallowIOExceptions)
       ()
     }

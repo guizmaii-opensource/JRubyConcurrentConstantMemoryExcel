@@ -13,11 +13,8 @@ object BuildHelper {
   lazy val stdSettings =
     Seq(
       javacOptions ++= Seq("-source", javaTarget, "-target", javaTarget),
-      scalacOptions ++= Seq("-Xsource:3"),       // TODO: Remove when upgrading to Scala3
-      // TODO: Re-enable when upgrading to Scala3
-      // scalacOptions ++= Seq("-no-indent"),              // See https://x.com/ghostdogpr/status/1706589471469425074
-      // TODO: Re-enable when upgrading to Scala3
-      // scalacOptions ++= Seq("-language:noAutoTupling"), // See https://github.com/scala/scala3/discussions/19255
+      scalacOptions ++= Seq("-no-indent"),              // See https://x.com/ghostdogpr/status/1706589471469425074
+      scalacOptions ++= Seq("-language:noAutoTupling"), // See https://github.com/scala/scala3/discussions/19255
       scalacOptions ++= Seq(s"-release:$javaTarget"),
       scalacOptions --= (if (insideCI.value) Nil else Seq("-Xfatal-warnings")),
       // format: off
