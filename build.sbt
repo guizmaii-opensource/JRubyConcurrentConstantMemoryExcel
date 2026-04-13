@@ -53,8 +53,8 @@ lazy val core =
     .settings(stdSettings *)
     .settings(
       libraryDependencies ++= Seq(
-        "dev.zio"                %% "zio"        % zioVersion,
-        "io.github.kantan-scala" %% "kantan.csv" % "0.11.0",
+        "dev.zio"                %% "zio"          % zioVersion,
+        "io.github.kantan-scala" %% "kantan.csv"   % "0.11.0",
         "com.github.pathikrit"   %% "better-files" % "3.9.2",
       ) ++ poi ++ testKitLibs,
       testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
