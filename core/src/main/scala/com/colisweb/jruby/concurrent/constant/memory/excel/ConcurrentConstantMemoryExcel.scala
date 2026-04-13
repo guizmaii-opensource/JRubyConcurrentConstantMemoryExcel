@@ -1,27 +1,26 @@
 package com.colisweb.jruby.concurrent.constant.memory.excel
 
-import java.io.{File, FileOutputStream}
-import java.nio.file.{Files, Path}
-import java.util.UUID
-
 import cats.effect.Resource
 import com.colisweb.jruby.concurrent.constant.memory.excel.utils.KantanExtension
 import kantan.csv.{CellDecoder, CellEncoder}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.Atomic
-import org.apache.poi.ss.usermodel._
+import org.apache.poi.ss.usermodel.*
 import org.apache.poi.ss.util.WorkbookUtil
 import org.apache.poi.xssf.streaming.SXSSFWorkbook
 
-import scala.annotation.switch
+import java.io.{File, FileOutputStream}
+import java.nio.file.{Files, Path}
+import java.util.UUID
+import scala.annotation.{nowarn, switch}
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable.ListBuffer
 import scala.io.Codec
 
 sealed abstract class Cell extends Product with Serializable
 object Cell {
-  private[excel] final case object BlankCell                 extends Cell
+  private[excel] case object BlankCell                       extends Cell
   private[excel] final case class StringCell(value: String)  extends Cell
   private[excel] final case class NumericCell(value: Double) extends Cell
 
@@ -29,13 +28,13 @@ object Cell {
   private[excel] final val STRING_CELL  = 's'
   private[excel] final val NUMERIC_CELL = 'n'
 
-  private[excel] implicit final val encoder: CellEncoder[Cell] = {
+  implicit private[excel] final val encoder: CellEncoder[Cell] = {
     case BlankCell          => s"$BLANK_CELL:"
     case StringCell(value)  => s"$STRING_CELL:$value"
     case NumericCell(value) => s"$NUMERIC_CELL:$value"
   }
 
-  private[excel] implicit final val decoder: CellDecoder[Cell] =
+  implicit private[excel] final val decoder: CellDecoder[Cell] =
     CellDecoder.fromUnsafe { s =>
       val Array(cellType, data) = s.split(":", 2)
       (cellType(0): @switch) match {
@@ -46,17 +45,19 @@ object Cell {
     }
 }
 
+@nowarn // TODO: Remove this nowarm when upgrading to Scala3
 final case class Page private[excel] (index: Int, path: Path)
 private[excel] object Page {
   implicit final val ordering: Ordering[Page] = Ordering.by(_.index)
 }
 
+@nowarn // TODO: Remove this nowarm when upgrading to Scala3
 final case class ConcurrentConstantMemoryState private[excel] (
-    sheetName: String,
-    headerData: Array[String],
-    tmpDirectory: File,
-    tasks: List[Task[Unit]],
-    pages: SortedSet[Page]
+  sheetName: String,
+  headerData: Array[String],
+  tmpDirectory: File,
+  tasks: List[Task[Unit]],
+  pages: SortedSet[Page]
 )
 
 object ConcurrentConstantMemoryExcel {
@@ -68,8 +69,8 @@ object ConcurrentConstantMemoryExcel {
 
   private[excel] type Row = Array[Cell]
 
-  private[this] implicit final val codec: Codec = Codec.UTF8
-  private[this] implicit final val scheduler: Scheduler =
+  implicit private[this] final val codec: Codec         = Codec.UTF8
+  implicit private[this] final val scheduler: Scheduler =
     Scheduler.computation(name = "ConcurrentConstantMemoryExcel-computation")
 
   final val blankCell: Cell = Cell.BlankCell
@@ -90,9 +91,9 @@ object ConcurrentConstantMemoryExcel {
     )
 
   final def addRows(
-      atomicCms: Atomic[ConcurrentConstantMemoryState],
-      computeRows: => Array[Row],
-      pageIndex: Int
+    atomicCms: Atomic[ConcurrentConstantMemoryState],
+    computeRows: => Array[Row],
+    pageIndex: Int
   ): Unit = {
     import KantanExtension.arrayEncoder
 
@@ -127,24 +128,23 @@ object ConcurrentConstantMemoryExcel {
       }
 
       var rowIndex = 1 // `1` is because the row 0 is already written (header)
-      cms.pages.foreach {
-        case Page(_, path) =>
-          path
-            .unsafeReadCsv[ListBuffer, ListBuffer[Cell]](rfc)
-            .foreach { rowData =>
-              val row = sheet.createRow(rowIndex)
-              rowIndex += 1
+      cms.pages.foreach { case Page(_, path) =>
+        path
+          .unsafeReadCsv[ListBuffer, ListBuffer[Cell]](rfc)
+          .foreach { rowData =>
+            val row = sheet.createRow(rowIndex)
+            rowIndex += 1
 
-              for ((cellData, cellIndex) <- rowData.zipWithIndex) {
-                cellData match {
-                  case Cell.BlankCell          => row.createCell(cellIndex, CellType.BLANK)
-                  case Cell.NumericCell(value) => row.createCell(cellIndex, CellType.NUMERIC).setCellValue(value)
-                  case Cell.StringCell(value)  => row.createCell(cellIndex, CellType.STRING).setCellValue(value)
-                }
+            for ((cellData, cellIndex) <- rowData.zipWithIndex) {
+              cellData match {
+                case Cell.BlankCell          => row.createCell(cellIndex, CellType.BLANK)
+                case Cell.NumericCell(value) => row.createCell(cellIndex, CellType.NUMERIC).setCellValue(value)
+                case Cell.StringCell(value)  => row.createCell(cellIndex, CellType.STRING).setCellValue(value)
               }
             }
+          }
 
-          sheet.flushRows()
+        sheet.flushRows()
       }
     }
 
@@ -157,18 +157,18 @@ object ConcurrentConstantMemoryExcel {
 
     // Used as a Resource to ease the clean of the temporary CSVs created during the tasks calcultation.
     val computeIntermediateTmpCsvFiles: Resource[Task, Unit] =
-      Resource.make(Task.gatherUnordered(cms.tasks).flatMap(_ => Task.unit))(_ => clean())
+      Resource.make(Task.parSequenceUnordered(cms.tasks).flatMap(_ => Task.unit))(_ => clean())
 
     val workbookResource: Resource[Task, SXSSFWorkbook] =
       Resource.make {
         // We'll manually manage the `flush` to the hard drive.
         Task(new SXSSFWorkbook(-1))
-      } { wb: SXSSFWorkbook =>
+      }((wb: SXSSFWorkbook) =>
         Task {
           wb.dispose() // dispose of temporary files backing this workbook on disk. Necessary because not done in the `close()`. See: https://stackoverflow.com/a/50363245
           wb.close()
         }
-      }
+      )
 
     val fileOutputStreamResource: Resource[Task, FileOutputStream] =
       Resource.make(Task(new FileOutputStream(fileName)))(out => Task(out.close()))

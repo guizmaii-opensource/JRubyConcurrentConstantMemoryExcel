@@ -1,13 +1,16 @@
 package com.colisweb.jruby.concurrent.constant.memory.excel
 
+import monix.execution.atomic.Atomic
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import java.io.File
 import java.nio.file.Files
 import java.util.Date
+import scala.annotation.nowarn
 
-import monix.execution.atomic.Atomic
-import org.scalatest.{FlatSpec, Matchers}
-
-class ConcurrentConstantMemoryExcelSpec extends FlatSpec with Matchers {
+@nowarn("msg=unused value")
+class ConcurrentConstantMemoryExcelSpec extends AnyFlatSpec with Matchers {
 
   "true" should "be true" in {
     true shouldBe true
