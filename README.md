@@ -22,7 +22,7 @@ In your `Jarfile`:
 ```ruby
 source 'https://dl.bintray.com/colisweb/maven'
 
-jar 'com.colisweb:JRubyConcurrentConstantMemoryExcel_2.12', '1.0.4'
+jar 'com.colisweb:JRubyConcurrentConstantMemoryExcel_3', '2.0.0'
 ```
 
 Usage
