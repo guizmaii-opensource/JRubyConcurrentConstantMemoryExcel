@@ -1,7 +1,7 @@
 import BuildHelper.*
 
 ThisBuild / organization := "com.guizmaii"
-ThisBuild / scalaVersion := "3.3.7"
+ThisBuild / scalaVersion := "3.3.8"
 
 ThisBuild / scalafmtCheck     := true
 ThisBuild / scalafmtSbtCheck  := true
@@ -62,7 +62,7 @@ lazy val core =
     .settings(
       libraryDependencies ++= Seq(
         "dev.zio"                %% "zio"          % zioVersion,
-        "io.github.kantan-scala" %% "kantan.csv"   % "0.11.0",
+        "io.github.kantan-scala" %% "kantan.csv"   % "0.12.0",
         "com.github.pathikrit"   %% "better-files" % "3.9.2",
       ) ++ poi ++ testKitLibs,
       testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
