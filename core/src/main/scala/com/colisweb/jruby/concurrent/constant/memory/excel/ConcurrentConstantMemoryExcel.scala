@@ -40,6 +40,7 @@ object Cell {
         case BLANK_CELL   => Cell.BlankCell
         case STRING_CELL  => Cell.StringCell(data)
         case NUMERIC_CELL => Cell.NumericCell(data.toDouble)
+        case unknown      => throw new IllegalArgumentException(s"Unknown cell type: '$unknown'")
       }
     }
 }
