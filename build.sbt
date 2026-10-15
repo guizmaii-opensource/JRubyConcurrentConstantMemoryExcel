@@ -30,7 +30,7 @@ addCommandAlias("rctc", "reload; ctc")
 
 // ### Dependencies ###
 
-val zioVersion = "2.1.26"
+val zioVersion = "2.1.27"
 
 lazy val testKitLibs = Seq(
   "dev.zio" %% "zio-test"     % zioVersion,
